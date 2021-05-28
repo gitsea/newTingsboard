@@ -15,18 +15,20 @@
  */
 package org.thingsboard.server.controller;
 
-import lombok.extern.slf4j.Slf4j;
+import java.nio.ByteBuffer;
+
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.thingsboard.server.common.data.EntityType;
@@ -44,7 +46,7 @@ import org.thingsboard.server.queue.util.TbCoreComponent;
 import org.thingsboard.server.service.security.permission.Operation;
 import org.thingsboard.server.service.security.permission.Resource;
 
-import java.nio.ByteBuffer;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
@@ -56,8 +58,7 @@ public class FirmwareController extends BaseController {
     public static final String CHECKSUM_ALGORITHM = "checksumAlgorithm";
 
     @PreAuthorize("hasAnyAuthority( 'TENANT_ADMIN')")
-    @RequestMapping(value = "/firmware/{firmwareId}/download", method = RequestMethod.GET)
-    @ResponseBody
+    @GetMapping(value = "/firmware/{firmwareId}/download")
     public ResponseEntity<org.springframework.core.io.Resource> downloadFirmware(@PathVariable(FIRMWARE_ID) String strFirmwareId) throws ThingsboardException {
         checkParameter(FIRMWARE_ID, strFirmwareId);
         try {
@@ -77,8 +78,7 @@ public class FirmwareController extends BaseController {
     }
 
     @PreAuthorize("hasAnyAuthority('TENANT_ADMIN', 'CUSTOMER_USER')")
-    @RequestMapping(value = "/firmware/info/{firmwareId}", method = RequestMethod.GET)
-    @ResponseBody
+    @GetMapping(value = "/firmware/info/{firmwareId}")
     public FirmwareInfo getFirmwareInfoById(@PathVariable(FIRMWARE_ID) String strFirmwareId) throws ThingsboardException {
         checkParameter(FIRMWARE_ID, strFirmwareId);
         try {
@@ -90,8 +90,7 @@ public class FirmwareController extends BaseController {
     }
 
     @PreAuthorize("hasAnyAuthority('TENANT_ADMIN')")
-    @RequestMapping(value = "/firmware/{firmwareId}", method = RequestMethod.GET)
-    @ResponseBody
+    @GetMapping(value = "/firmware/{firmwareId}")
     public Firmware getFirmwareById(@PathVariable(FIRMWARE_ID) String strFirmwareId) throws ThingsboardException {
         checkParameter(FIRMWARE_ID, strFirmwareId);
         try {
@@ -103,8 +102,7 @@ public class FirmwareController extends BaseController {
     }
 
     @PreAuthorize("hasAnyAuthority('TENANT_ADMIN')")
-    @RequestMapping(value = "/firmware", method = RequestMethod.POST)
-    @ResponseBody
+    @PostMapping(value = "/firmware")
     public FirmwareInfo saveFirmwareInfo(@RequestBody FirmwareInfo firmwareInfo) throws ThingsboardException {
         boolean created = firmwareInfo.getId() == null;
         try {
@@ -122,8 +120,7 @@ public class FirmwareController extends BaseController {
     }
 
     @PreAuthorize("hasAnyAuthority('TENANT_ADMIN')")
-    @RequestMapping(value = "/firmware/{firmwareId}", method = RequestMethod.POST)
-    @ResponseBody
+    @PostMapping(value = "/firmware/{firmwareId}")
     public Firmware saveFirmwareData(@PathVariable(FIRMWARE_ID) String strFirmwareId,
                                      @RequestParam(required = false) String checksum,
                                      @RequestParam(CHECKSUM_ALGORITHM) String checksumAlgorithmStr,
@@ -166,8 +163,7 @@ public class FirmwareController extends BaseController {
     }
 
     @PreAuthorize("hasAnyAuthority('TENANT_ADMIN', 'CUSTOMER_USER')")
-    @RequestMapping(value = "/firmwares", method = RequestMethod.GET)
-    @ResponseBody
+    @GetMapping(value = "/firmwares")
     public PageData<FirmwareInfo> getFirmwares(@RequestParam int pageSize,
                                                @RequestParam int page,
                                                @RequestParam(required = false) String textSearch,
@@ -182,8 +178,7 @@ public class FirmwareController extends BaseController {
     }
 
     @PreAuthorize("hasAnyAuthority('TENANT_ADMIN', 'CUSTOMER_USER')")
-    @RequestMapping(value = "/firmwares/{deviceProfileId}/{type}/{hasData}", method = RequestMethod.GET)
-    @ResponseBody
+    @GetMapping(value = "/firmwares/{deviceProfileId}/{type}/{hasData}")
     public PageData<FirmwareInfo> getFirmwares(@PathVariable("deviceProfileId") String strDeviceProfileId,
                                                @PathVariable("type") String strType,
                                                @PathVariable("hasData") boolean hasData,
@@ -204,8 +199,7 @@ public class FirmwareController extends BaseController {
     }
 
     @PreAuthorize("hasAnyAuthority('TENANT_ADMIN')")
-    @RequestMapping(value = "/firmware/{firmwareId}", method = RequestMethod.DELETE)
-    @ResponseBody
+    @DeleteMapping(value = "/firmware/{firmwareId}")
     public void deleteFirmware(@PathVariable("firmwareId") String strFirmwareId) throws ThingsboardException {
         checkParameter(FIRMWARE_ID, strFirmwareId);
         try {
