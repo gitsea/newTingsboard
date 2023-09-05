@@ -39,6 +39,7 @@ import org.thingsboard.common.util.ThingsBoardThreadFactory;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -106,6 +107,13 @@ public class MqttTransportHandlerTest {
     MqttPublishMessage getMqttPublishMessage() {
         MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.PUBLISH, true, MqttQoS.AT_LEAST_ONCE, false, 123);
         MqttPublishVariableHeader variableHeader = new MqttPublishVariableHeader("v1/gateway/telemetry", packedId.incrementAndGet());
+        ByteBuf payload = new EmptyByteBuf(new PooledByteBufAllocator());
+        return new MqttPublishMessage(mqttFixedHeader, variableHeader, payload);
+    }
+
+    MqttPublishMessage getMqttPublishMessageAndProvisionResponse() {
+        MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.SUBSCRIBE, true, MqttQoS.AT_LEAST_ONCE, false, 1);
+        MqttPublishVariableHeader variableHeader = new MqttPublishVariableHeader("provision/response", packedId.incrementAndGet());
         ByteBuf payload = new EmptyByteBuf(new PooledByteBufAllocator());
         return new MqttPublishMessage(mqttFixedHeader, variableHeader, payload);
     }
@@ -205,4 +213,20 @@ public class MqttTransportHandlerTest {
         messages.forEach((msg) -> verify(handler, times(1)).processRegularSessionMsg(ctx, msg));
     }
 
+    @Test
+    public void givenMqttConnectMessageAndPublishProvisionImmediately_whenProcessMqttMsg(){
+        givenMqttConnectMessage_whenProcessMqttMsg_thenProcessConnect();
+
+        List<MqttPublishMessage> messages = new ArrayList<>();
+        // add provision subscribe message
+        messages.add(getMqttPublishMessageAndProvisionResponse());
+
+        messages.forEach((msg) -> handler.channelRead(ctx, msg));
+
+        assertThat(handler.address, is(IP_ADDR));
+        assertThat(handler.deviceSessionCtx.getChannel(), is(ctx));
+        assertThat(handler.deviceSessionCtx.isConnected(), is(false));
+        verify(handler, never()).doDisconnect();
+        verify(handler, times(1)).processConnect(any(), any());
+    }
 }

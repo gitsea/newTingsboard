@@ -110,8 +110,7 @@ import static com.amazonaws.util.StringUtils.UTF8;
 import static io.netty.handler.codec.mqtt.MqttMessageType.CONNECT;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PINGRESP;
 import static io.netty.handler.codec.mqtt.MqttMessageType.SUBACK;
-import static io.netty.handler.codec.mqtt.MqttQoS.AT_LEAST_ONCE;
-import static io.netty.handler.codec.mqtt.MqttQoS.AT_MOST_ONCE;
+import static io.netty.handler.codec.mqtt.MqttQoS.*;
 import static org.thingsboard.server.common.transport.service.DefaultTransportService.SESSION_EVENT_MSG_CLOSED;
 import static org.thingsboard.server.common.transport.service.DefaultTransportService.SESSION_EVENT_MSG_OPEN;
 import static org.thingsboard.server.common.transport.service.DefaultTransportService.SUBSCRIBE_TO_ATTRIBUTE_UPDATES_ASYNC_MSG;
@@ -273,6 +272,28 @@ public class MqttTransportHandler extends ChannelInboundHandlerAdapter implement
                 break;
             case DISCONNECT:
                 ctx.close();
+                break;
+             case SUBSCRIBE:
+                MqttSubscribeMessage mqttSubMsg = (MqttSubscribeMessage) msg;
+                log.trace("[{}] Processing subscription [{}]!", sessionId, mqttSubMsg.variableHeader().messageId());
+                List<Integer> grantedQoSList = new ArrayList<>();
+                for (MqttTopicSubscription subscription : mqttSubMsg.payload().topicSubscriptions()) {
+                    String topic = subscription.topicName();
+                    MqttQoS reqQoS = subscription.qualityOfService();
+                    try {
+                        switch (topic) {
+                            case MqttTopics.DEVICE_PROVISION_RESPONSE_TOPIC:
+                                registerSubQoS(topic, grantedQoSList, reqQoS);
+                                break;
+                            default:
+                                grantedQoSList.add(FAILURE.value());
+                        }
+                    }catch (Exception e){
+                        log.warn("[{}] Failed to subscribe to [{}][{}]", sessionId, topic, reqQoS, e);
+                        grantedQoSList.add(FAILURE.value());
+                    }
+                }
+                ctx.writeAndFlush(createSubAckMessage(mqttSubMsg.variableHeader().messageId(), grantedQoSList));
                 break;
         }
     }
