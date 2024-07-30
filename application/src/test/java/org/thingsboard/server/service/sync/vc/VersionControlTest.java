@@ -42,6 +42,18 @@ import org.thingsboard.server.common.data.HasTenantId;
 import org.thingsboard.server.common.data.OtaPackage;
 import org.thingsboard.server.common.data.Tenant;
 import org.thingsboard.server.common.data.User;
+import org.thingsboard.server.common.data.alarm.AlarmSeverity;
+import org.thingsboard.server.common.data.alarm.rule.AlarmRule;
+import org.thingsboard.server.common.data.alarm.rule.condition.AlarmCondition;
+import org.thingsboard.server.common.data.alarm.rule.condition.AlarmConditionKeyType;
+import org.thingsboard.server.common.data.alarm.rule.condition.AlarmRuleCondition;
+import org.thingsboard.server.common.data.alarm.rule.condition.AlarmRuleConfiguration;
+import org.thingsboard.server.common.data.alarm.rule.condition.ArgumentOperation;
+import org.thingsboard.server.common.data.alarm.rule.condition.ArgumentValueType;
+import org.thingsboard.server.common.data.alarm.rule.condition.ConstantArgument;
+import org.thingsboard.server.common.data.alarm.rule.condition.FromMessageArgument;
+import org.thingsboard.server.common.data.alarm.rule.condition.SimpleAlarmConditionFilter;
+import org.thingsboard.server.common.data.alarm.rule.filter.AlarmRuleDeviceTypeEntityFilter;
 import org.thingsboard.server.common.data.asset.Asset;
 import org.thingsboard.server.common.data.asset.AssetProfile;
 import org.thingsboard.server.common.data.device.data.DefaultDeviceTransportConfiguration;
@@ -72,6 +84,8 @@ import org.thingsboard.server.common.data.rule.RuleNode;
 import org.thingsboard.server.common.data.script.ScriptLanguage;
 import org.thingsboard.server.common.data.security.Authority;
 import org.thingsboard.server.common.data.security.DeviceCredentials;
+import org.thingsboard.server.common.data.sync.ie.EntityExportData;
+import org.thingsboard.server.common.data.sync.ie.EntityImportResult;
 import org.thingsboard.server.common.data.sync.vc.EntityTypeLoadResult;
 import org.thingsboard.server.common.data.sync.vc.EntityVersion;
 import org.thingsboard.server.common.data.sync.vc.RepositoryAuthMethod;
@@ -95,6 +109,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -561,6 +576,60 @@ public class VersionControlTest extends AbstractControllerTest {
         checkImportedEntity(tenantId1, defaultDeviceProfile, tenantId2, importedDeviceProfile);
     }
 
+    @Test
+    public void testExportImportAlarmRuleWithDeProfileProfileFilter_betweenTenants() throws Exception {
+        DeviceProfile deviceProfile = createDeviceProfile(null, null, "Device profile v1.0");
+        AlarmRule alarmRule = createAlarmRule(deviceProfile.getId());
+        String versionId = createVersion("alarm rules and device profiles", EntityType.ALARM_RULE, EntityType.DEVICE_PROFILE);
+
+        loginTenant2();
+        loadVersion(versionId, config -> {
+            config.setFindExistingEntityByName(false);
+        }, EntityType.ALARM_RULE, EntityType.DEVICE_PROFILE);
+
+        DeviceProfile importedDeviceProfile = findDeviceProfile(deviceProfile.getName());
+        checkImportedEntity(tenantId1, deviceProfile, tenantId2, importedDeviceProfile);
+        checkImportedDeviceProfileData(deviceProfile, importedDeviceProfile);
+
+        AlarmRule importedRule = findAlarmRules(alarmRule.getName());
+        checkImportedEntity(tenantId1, alarmRule, tenantId2, importedRule);
+
+        assertThat(importedRule.getName()).isEqualTo(alarmRule.getName());
+        assertThat(importedRule.getAlarmType()).isEqualTo(alarmRule.getAlarmType());
+        assertThat(importedRule.isEnabled()).isEqualTo(alarmRule.isEnabled());
+        assertThat(importedRule.getDescription()).isEqualTo(alarmRule.getDescription());
+
+        var configuration = alarmRule.getConfiguration();
+        var importedConfiguration = importedRule.getConfiguration();
+
+        assertThat(importedConfiguration.getCreateRules()).isEqualTo(configuration.getCreateRules());
+        assertThat(importedConfiguration.getClearRule()).isEqualTo(configuration.getClearRule());
+        assertThat(importedConfiguration.isPropagate()).isEqualTo(configuration.isPropagate());
+        assertThat(importedConfiguration.isPropagateToOwner()).isEqualTo(configuration.isPropagateToOwner());
+        assertThat(importedConfiguration.isPropagateToTenant()).isEqualTo(configuration.isPropagateToTenant());
+        assertThat(importedConfiguration.getPropagateRelationTypes()).isEqualTo(configuration.getPropagateRelationTypes());
+
+        assertThat(((AlarmRuleDeviceTypeEntityFilter) importedConfiguration.getSourceEntityFilters().get(0)).getDeviceProfileIds().get(0)).isEqualTo(importedDeviceProfile.getId());
+    }
+
+    @Test
+    public void testExportImportAlarmRuleWithDeProfileProfileFilter_sameTenant() throws Exception {
+        DeviceProfile deviceProfile = createDeviceProfile(null, null, "Device profile v1.0");
+        AlarmRule alarmRule = createAlarmRule(deviceProfile.getId());
+        String versionId = createVersion("alarm rules", EntityType.ALARM_RULE);
+
+        loadVersion(versionId, config -> {
+            config.setFindExistingEntityByName(false);
+        }, EntityType.ALARM_RULE);
+        AlarmRule importedRule = findAlarmRules(alarmRule.getName());
+        checkImportedEntity(tenantId1, alarmRule, tenantId1, importedRule);
+        assertThat(importedRule.getName()).isEqualTo(alarmRule.getName());
+        assertThat(importedRule.getAlarmType()).isEqualTo(alarmRule.getAlarmType());
+        assertThat(importedRule.isEnabled()).isEqualTo(alarmRule.isEnabled());
+        assertThat(importedRule.getDescription()).isEqualTo(alarmRule.getDescription());
+        assertThat(importedRule.getConfiguration()).isEqualTo(alarmRule.getConfiguration());
+    }
+
     private <E extends ExportableEntity<?> & HasTenantId> void checkImportedEntity(TenantId tenantId1, E initialEntity, TenantId tenantId2, E importedEntity) {
         assertThat(initialEntity.getTenantId()).isEqualTo(tenantId1);
         assertThat(importedEntity.getTenantId()).isEqualTo(tenantId2);
@@ -729,6 +798,48 @@ public class VersionControlTest extends AbstractControllerTest {
 
     private void loginTenant2() throws Exception {
         login(tenantAdmin2.getEmail(), tenantAdmin2.getEmail());
+    }
+
+    private AlarmRule createAlarmRule(DeviceProfileId deviceProfileId) {
+        AlarmRule alarmRule = new AlarmRule();
+        alarmRule.setAlarmType("highTemperatureAlarm");
+        alarmRule.setName("highTemperatureAlarmRule");
+        alarmRule.setEnabled(true);
+
+        var temperatureKey = new FromMessageArgument(AlarmConditionKeyType.TIME_SERIES, "temperature", ArgumentValueType.NUMERIC);
+        var highTemperatureConst = new ConstantArgument(ArgumentValueType.NUMERIC, 30.0);
+
+        SimpleAlarmConditionFilter highTempFilter = new SimpleAlarmConditionFilter();
+        highTempFilter.setLeftArgId("temperatureKey");
+        highTempFilter.setRightArgId("highTemperatureConst");
+        highTempFilter.setOperation(ArgumentOperation.GREATER);
+
+        AlarmCondition alarmCondition = new AlarmCondition();
+        alarmCondition.setConditionFilter(highTempFilter);
+        AlarmRuleCondition alarmRuleCondition = new AlarmRuleCondition();
+        alarmRuleCondition.setAlarmCondition(alarmCondition);
+        AlarmRuleConfiguration alarmRuleConfiguration = new AlarmRuleConfiguration();
+        alarmRuleConfiguration.setCreateRules(new TreeMap<>(Collections.singletonMap(AlarmSeverity.CRITICAL, alarmRuleCondition)));
+
+        var lowTemperatureConst = new ConstantArgument(ArgumentValueType.NUMERIC, 10.0);
+
+        SimpleAlarmConditionFilter lowTempFilter = new SimpleAlarmConditionFilter();
+        lowTempFilter.setLeftArgId("temperatureKey");
+        lowTempFilter.setRightArgId("lowTemperatureConst");
+        lowTempFilter.setOperation(ArgumentOperation.LESS);
+
+        AlarmRuleCondition clearRule = new AlarmRuleCondition();
+        AlarmCondition clearCondition = new AlarmCondition();
+        alarmRuleConfiguration.setArguments(Map.of("temperatureKey", temperatureKey, "highTemperatureConst", highTemperatureConst, "lowTemperatureConst", lowTemperatureConst));
+        clearCondition.setConditionFilter(lowTempFilter);
+        clearRule.setAlarmCondition(clearCondition);
+        alarmRuleConfiguration.setClearRule(clearRule);
+
+        AlarmRuleDeviceTypeEntityFilter sourceFilter = new AlarmRuleDeviceTypeEntityFilter(List.of(deviceProfileId));
+        alarmRuleConfiguration.setSourceEntityFilters(Collections.singletonList(sourceFilter));
+
+        alarmRule.setConfiguration(alarmRuleConfiguration);
+        return doPost("/api/alarmRule", alarmRule, AlarmRule.class);
     }
 
     private Device createDevice(CustomerId customerId, DeviceProfileId deviceProfileId, String name, String accessToken, Consumer<Device>... modifiers) {
@@ -962,6 +1073,10 @@ public class VersionControlTest extends AbstractControllerTest {
 
     private Dashboard assignDashboardToCustomer(DashboardId dashboardId, CustomerId customerId) {
         return doPost("/api/customer/" + customerId + "/dashboard/" + dashboardId, Dashboard.class);
+    }
+
+    private AlarmRule findAlarmRules(String name) throws Exception {
+        return doGetTypedWithPageLink("/api/alarmRules?", new TypeReference<PageData<AlarmRule>>() {}, new PageLink(100, 0, name)).getData().get(0);
     }
 
     private Asset findAsset(String name) throws Exception {

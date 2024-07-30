@@ -37,6 +37,7 @@ import org.thingsboard.server.common.data.Tenant;
 import org.thingsboard.server.common.data.TenantProfile;
 import org.thingsboard.server.common.data.edge.EdgeEventActionType;
 import org.thingsboard.server.common.data.edge.EdgeEventType;
+import org.thingsboard.server.common.data.id.AlarmRuleId;
 import org.thingsboard.server.common.data.id.AssetId;
 import org.thingsboard.server.common.data.id.AssetProfileId;
 import org.thingsboard.server.common.data.id.DeviceId;
@@ -84,6 +85,7 @@ import org.thingsboard.server.service.ota.OtaPackageStateService;
 import org.thingsboard.server.service.profile.TbAssetProfileCache;
 import org.thingsboard.server.service.profile.TbDeviceProfileCache;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -197,6 +199,11 @@ public class DefaultTbClusterService implements TbClusterService {
 
     @Override
     public void pushMsgToRuleEngine(TenantId tenantId, EntityId entityId, TbMsg tbMsg, TbQueueCallback callback) {
+        pushMsgToRuleEngine(tenantId, entityId, tbMsg, Collections.emptySet(), callback);
+    }
+
+    @Override
+    public void pushMsgToRuleEngine(TenantId tenantId, EntityId entityId, TbMsg tbMsg, Set<String> relations, TbQueueCallback callback) {
         if (tenantId == null || tenantId.isNullUid()) {
             if (entityId.getEntityType().equals(EntityType.TENANT)) {
                 tenantId = TenantId.fromUUID(entityId.getId());
@@ -209,7 +216,7 @@ public class DefaultTbClusterService implements TbClusterService {
             tbMsg = transformMsg(tbMsg, ruleEngineProfile);
         }
 
-        ruleEngineProducerService.sendToRuleEngine(producerProvider.getRuleEngineMsgProducer(), tenantId, tbMsg, callback);
+        ruleEngineProducerService. sendToRuleEngine(producerProvider.getRuleEngineMsgProducer(), tenantId, tbMsg, relations, callback);
         toRuleEngineMsgs.incrementAndGet();
     }
 
@@ -371,7 +378,12 @@ public class DefaultTbClusterService implements TbClusterService {
         }
     }
 
-    private <T> void broadcastEntityChangeToTransport(TenantId tenantId, EntityId entityid, T entity, TbQueueCallback callback) {
+    @Override
+    public void onAlarmRuleChange(TenantId tenantId, AlarmRuleId alarmRuleId, ComponentLifecycleEvent event) {
+        broadcast(new ComponentLifecycleMsg(tenantId, alarmRuleId, event));
+    }
+
+    public <T> void broadcastEntityChangeToTransport(TenantId tenantId, EntityId entityid, T entity, TbQueueCallback callback) {
         String entityName = (entity instanceof HasName) ? ((HasName) entity).getName() : entity.getClass().getName();
         log.trace("[{}][{}][{}] Processing [{}] change event", tenantId, entityid.getEntityType(), entityid.getId(), entityName);
         ToTransportMsg transportMsg = ToTransportMsg.newBuilder().setEntityUpdateMsg(ProtoUtils.toEntityUpdateProto(entity)).build();

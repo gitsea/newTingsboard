@@ -340,7 +340,6 @@ public class ExportImportServiceSqlTest extends AbstractControllerTest {
         deviceProfileService.saveDeviceProfile(importedDeviceProfile);
     }
 
-
     protected Device createDevice(TenantId tenantId, CustomerId customerId, DeviceProfileId deviceProfileId, String name) {
         Device device = new Device();
         device.setTenantId(tenantId);
