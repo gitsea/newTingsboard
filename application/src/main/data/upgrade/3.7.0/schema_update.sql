@@ -14,3 +14,4 @@
 -- limitations under the License.
 --
 
+ALTER TABLE ota_package DROP CONSTRAINT IF EXISTS fk_device_profile_ota_package;
