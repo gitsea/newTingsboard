@@ -22,7 +22,7 @@ import org.thingsboard.server.common.data.AttributeScope;
 public class Output {
 
     private String name;
-    private String type;
+    private OutputType type;
     private AttributeScope scope;
 
 }
